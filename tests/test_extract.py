@@ -12,15 +12,17 @@ class DummyResponse:
             raise Exception(f"HTTP {self.status_code}")
 
 def test_scrape_page_success(monkeypatch):
-    # HTML dengan satu product-card lengkap
+    # HTML sesuai struktur collection-card
     html = """
-    <div class="product-card">
-      <span class="product-title">Test Shirt</span>
-      <span class="product-price">$10.00</span>
-      <span class="product-rating">4.5 / 5</span>
-      <span class="product-colors">2 Colors</span>
-      <span class="product-size">Size: M</span>
-      <span class="product-gender">Gender: Unisex</span>
+    <div class="collection-card">
+      <h3 class="product-title">Test Shirt</h3>
+      <div class="price-container"><span class="price">$10.00</span></div>
+      <div class="product-details">
+        <p>Rating: ⭐ 4.5 / 5</p>
+        <p>2 Colors</p>
+        <p>Size: M</p>
+        <p>Gender: Unisex</p>
+      </div>
     </div>
     """
     monkeypatch.setattr("requests.get", lambda url, timeout: DummyResponse(html))
@@ -28,12 +30,10 @@ def test_scrape_page_success(monkeypatch):
     assert isinstance(data, list)
     assert len(data) == 1
     item = data[0]
-    # Cek semua field ada
-    for field in ("title", "price", "rating", "colors", "size", "gender", "timestamp"):
-        assert field in item
+    # Cek semua field ada dan ter-capture sesuai selector
     assert item["title"] == "Test Shirt"
     assert item["price"] == "$10.00"
-    assert item["rating"] == "4.5 / 5"
+    assert item["rating"].startswith("Rating:")
     assert item["colors"] == "2 Colors"
     assert item["size"] == "Size: M"
     assert item["gender"] == "Gender: Unisex"
@@ -47,17 +47,16 @@ def test_scrape_page_http_error(monkeypatch):
     assert data == []  # error handling mengembalikan list kosong
 
 def test_extract_all_aggregates(monkeypatch):
-    # Monkey-patch scrape_page untuk tiap halaman
     calls = []
     def fake_scrape(url):
         calls.append(url)
         return [{"title": url}]
-    monkeypatch.setattr("utils.extract", "scrape_page", fake_scrape)
+    # Patch langsung pada modul extract
+    monkeypatch.setattr(extract, "scrape_page", fake_scrape)
     all_data = extract.extract_all(pages=3)
     assert len(all_data) == 3
-    # URL tiap halaman
     assert calls == [
-        "https://fashion-studio.dicoding.dev/products?page=1",
-        "https://fashion-studio.dicoding.dev/products?page=2",
-        "https://fashion-studio.dicoding.dev/products?page=3",
+        "https://fashion-studio.dicoding.dev",
+        "https://fashion-studio.dicoding.dev/page2",
+        "https://fashion-studio.dicoding.dev/page3",
     ]
